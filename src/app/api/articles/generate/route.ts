@@ -10,20 +10,22 @@ const VALID_CATEGORIES: CategorySlug[] = [
   "general-health",
 ];
 
+
 // ✅ AUTOMATION (GET)
 export async function GET() {
   try {
     const randomCategory =
       VALID_CATEGORIES[Math.floor(Math.random() * VALID_CATEGORIES.length)];
 
-    // ⚡ KEY CHANGE: removed "await"
-    runPipeline(randomCategory, "cron");
+    // ✅ IMPORTANT: MUST await (this was your bug)
+    const result = await runPipeline(randomCategory, "cron");
 
     return NextResponse.json({
       success: true,
-      message: "Pipeline started",
       category: randomCategory,
+      ...result,
     });
+
   } catch (err) {
     console.error("AUTO GENERATE ERROR:", err);
 
@@ -33,6 +35,7 @@ export async function GET() {
     );
   }
 }
+
 
 // ✅ MANUAL (POST)
 export async function POST(request: NextRequest) {
@@ -68,10 +71,16 @@ export async function POST(request: NextRequest) {
       userId
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      ...result,
+    });
+
   } catch (err) {
+    console.error("MANUAL GENERATE ERROR:", err);
+
     return NextResponse.json(
-      { error: String(err) },
+      { success: false, error: String(err) },
       { status: 500 }
     );
   }
