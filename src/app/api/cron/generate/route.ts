@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { runPipeline } from "@/lib/pipeline/pipeline";
 import type { CategorySlug } from "@/types/database";
 
@@ -9,33 +9,31 @@ const VALID_CATEGORIES: CategorySlug[] = [
   "general-health",
 ];
 
-export async function GET(request: NextRequest) {
-  // Verify cron secret
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const category = searchParams.get("category") as CategorySlug;
-
-  if (!category || !VALID_CATEGORIES.includes(category)) {
-    return NextResponse.json(
-      { error: "Invalid or missing category" },
-      { status: 400 }
-    );
-  }
-
+export async function GET() {
   try {
-    const result = await runPipeline(category, "cron");
+    // Pick random category
+    const randomCategory =
+      VALID_CATEGORIES[Math.floor(Math.random() * VALID_CATEGORIES.length)];
+
+    // Run pipeline
+    const result = await runPipeline(randomCategory, "cron");
+
     return NextResponse.json({
       success: true,
+      category: randomCategory,
+      pipelineRunId: result.pipelineRunId,
       papersFetched: result.papersFetched,
       articlesGenerated: result.articlesGenerated,
+      errors: result.errors,
     });
   } catch (err) {
+    console.error("CRON ERROR:", err);
+
     return NextResponse.json(
-      { error: String(err) },
+      {
+        success: false,
+        error: String(err),
+      },
       { status: 500 }
     );
   }
