@@ -36,26 +36,26 @@ export async function runPipeline(
 
   // Create pipeline run record
   const { data: pipelineRun, error: pipelineError } = await supabase
-  .from("pipeline_runs")
-  .insert({
-    trigger_type: triggerType,
-    triggered_by: triggeredBy || null,
-    category_id: categoryRow.id,
-    status: "fetching",
-  })
-  .select("id")
-  .single();
+    .from("pipeline_runs")
+    .insert({
+      trigger_type: triggerType,
+      triggered_by: triggeredBy || null,
+      category_id: categoryRow.id,
+      status: "fetching",
+    })
+    .select("id")
+    .single();
 
-if (pipelineError) {
-  console.error("Pipeline insert error:", pipelineError.message);
-  throw new Error(pipelineError.message);
-}
+  if (pipelineError) {
+    console.error("Pipeline insert error:", pipelineError.message);
+    throw new Error(pipelineError.message);
+  }
 
-if (!pipelineRun || !pipelineRun.id) {
-  throw new Error("Failed to create pipeline run record");
-}
+  if (!pipelineRun || !pipelineRun.id) {
+    throw new Error("Failed to create pipeline run record");
+  }
 
-const runId = pipelineRun.id;
+  const runId = pipelineRun.id;
 
   try {
     // Step 1: Fetch papers
@@ -74,12 +74,21 @@ const runId = pipelineRun.id;
     if (papers.length === 0) {
       await supabase
         .from("pipeline_runs")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
         .eq("id", runId);
-      return { pipelineRunId: runId, papersFetched: 0, articlesGenerated: 0, errors: [] };
+
+      return {
+        pipelineRunId: runId,
+        papersFetched: 0,
+        articlesGenerated: 0,
+        errors: [],
+      };
     }
 
-    // Step 2: Analyze and select top papers
+    // Step 2: Analyze papers
     await supabase
       .from("pipeline_runs")
       .update({ status: "analyzing" })
@@ -87,7 +96,7 @@ const runId = pipelineRun.id;
 
     const selectedPapers = await selectTopPapers(papers, maxArticles);
 
-    // Step 3: Generate articles for each selected paper
+    // Step 3: Generate articles
     await supabase
       .from("pipeline_runs")
       .update({ status: "generating" })
@@ -97,19 +106,20 @@ const runId = pipelineRun.id;
 
     for (const paper of selectedPapers) {
       try {
-        // Store source paper (use insert, skip if duplicate)
         let storedPaperId: string | null = null;
 
-        // Check if paper already exists by pubmed_id or title
+        // Check if paper already exists
         if (paper.pubmed_id) {
           const { data: existing } = await supabase
             .from("source_papers")
             .select("id")
             .eq("pubmed_id", paper.pubmed_id)
             .single();
+
           if (existing) storedPaperId = existing.id;
         }
 
+        // Insert paper if not exists
         if (!storedPaperId) {
           const { data: inserted, error: insertError } = await supabase
             .from("source_papers")
@@ -132,13 +142,13 @@ const runId = pipelineRun.id;
           if (insertError) {
             console.error("Failed to store paper:", insertError.message);
           }
+
           storedPaperId = inserted?.id || null;
         }
 
         // Generate article
         const generated = await generateArticle(paper);
 
-        // Ensure unique slug
         const slug = `${generated.slug}-${Date.now().toString(36)}`;
 
         // Fact-check
@@ -152,24 +162,25 @@ const runId = pipelineRun.id;
           paper.abstract
         );
 
-        // Get image
+        // Image
         const image = await fetchUnsplashImage(
           generated.unsplash_search_terms
         );
 
-        // Store article as draft
+        // ✅ STORE AS PUBLISHED (FIXED)
         const { data: article } = await supabase
           .from("articles")
           .insert({
             slug,
-            title: generated.content.match(/^#\s+(.+)/m)?.[1] || paper.title,
+            title:
+              generated.content.match(/^#\s+(.+)/m)?.[1] || paper.title,
             content: generated.content,
             excerpt: generated.excerpt,
             featured_image_url: image?.url || null,
             featured_image_alt: image?.alt || null,
             featured_image_credit: image?.credit || null,
             category_id: categoryRow.id,
-            status: "draft",
+            status: "published", // ✅ KEY CHANGE
             fact_check_status: factCheckReport.overall_status,
             fact_check_report: factCheckReport as any,
             seo_title: generated.seo_title,
@@ -183,12 +194,15 @@ const runId = pipelineRun.id;
 
         // Link citation
         if (article && storedPaperId) {
-          const { error: citError } = await supabase.from("article_citations").insert({
-            article_id: article.id,
-            paper_id: storedPaperId,
-            citation_number: 1,
-            context: `Based on: ${paper.title}`,
-          });
+          const { error: citError } = await supabase
+            .from("article_citations")
+            .insert({
+              article_id: article.id,
+              paper_id: storedPaperId,
+              citation_number: 1,
+              context: `Based on: ${paper.title}`,
+            });
+
           if (citError) {
             console.error("Failed to link citation:", citError.message);
           }
