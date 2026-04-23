@@ -181,6 +181,7 @@ export async function runPipeline(
             featured_image_credit: image?.credit || null,
             category_id: categoryRow.id,
             status: "published", // ✅ KEY CHANGE
+            published_at: new Date().toISOString(),
             fact_check_status: factCheckReport.overall_status,
             fact_check_report: factCheckReport as any,
             seo_title: generated.seo_title,

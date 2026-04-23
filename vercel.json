@@ -1,20 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/generate?category=diabetes",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/generate?category=transplant",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/generate?category=bone-marrow",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/generate?category=general-health",
-      "schedule": "0 8 * * *"
+      "path": "/api/articles/generate",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
